@@ -20,6 +20,15 @@ METRIC_UNITS = {"before", "after", "usual", "member", "rest", "top_value", "tota
 FIXED: dict[str, Format] = {
     "share": "percent",
     "share_of_total_change": "percent",
+    "size": "percent",
+    "per_period_size": "percent",
+    "top_share": "percent",
+    "target_share": "percent",
+    "inverse": "ratio",
+    "times": "ratio",
+    "covered": "count",
+    "length": "count",
+    "median": "count",
     "overall_change": "change",
     "per_period": "percent",
     "r2": "percent",
@@ -33,18 +42,32 @@ HIDDEN = {"q_value", "robust_z", "spearman", "concentration_index", "against", "
 
 def fact_values(fact: Fact) -> dict[str, str]:
     """Every token a fact offers, and the text it becomes."""
-    found = {f"{{{fact.id}}}": fmt(fact.value, fact.format, fact.unit)}
+    found = {
+        f"{{{fact.id}}}": fmt(fact.value, fact.format, fact.unit),
+        f"{{{fact.id}.n}}": fmt(fact.n, "count"),
+    }
     for key, value in fact.components.items():
         if key in HIDDEN:
             continue
         token = f"{{{fact.id}.{key}}}"
         if isinstance(value, str):
             found[token] = value
-        elif key in METRIC_UNITS:
+        elif key in METRIC_UNITS or key.endswith(("_before", "_after")):
             found[token] = fmt(value, fact.metric_format, fact.unit)
         else:
             found[token] = fmt(value, FIXED.get(key, "number"))
     return found
+
+
+def tokenized(fact: Fact) -> str:
+    """The fact's sentence with each number replaced by its token, so a writer copying it
+    copies tokens, not numbers."""
+    text = fact.statement
+    for token, shown in sorted(fact_values(fact).items(), key=lambda kv: -len(kv[1])):
+        if re.search(r"\d", shown):
+            # never inside another number or a label such as 2024-10
+            text = re.sub(rf"(?<![\w.,{{/-]){re.escape(shown)}(?![\w%/-])", token, text)
+    return text
 
 
 def values(report: FactsReport) -> dict[str, str]:

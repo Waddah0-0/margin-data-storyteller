@@ -49,6 +49,7 @@ class TimeAxis:
     periods: list[str]  # every period with data, in order
     full: list[str]  # the periods comparisons use
     partial: dict[str, str] = field(default_factory=dict)  # period -> why it is partial
+    partial_numbers: dict[str, dict[str, float]] = field(default_factory=dict)
 
     @property
     def sql(self) -> str:
@@ -136,10 +137,17 @@ def build_time(frame: pd.DataFrame, column: str, profile: ColumnProfile) -> Time
         coverage = covered / length
         if coverage < 0.6 or (coverage < 0.9 and ratio < 0.8):
             days = "day" if covered == 1 else "days"
+            median = float(others.median())
             axis.partial[label] = (
-                f"it has data for only {covered} of its {length} {days}"
-                f" ({counts[label]:,} rows, against a median of {others.median():,.0f})"
+                f"it has data for only {fmt(covered, 'count')} of its {fmt(length, 'count')} "
+                f"{days} ({fmt(counts[label], 'count')} rows, against a median of "
+                f"{fmt(median, 'count')})"
             )
+            axis.partial_numbers[label] = {
+                "covered": float(covered),
+                "length": float(length),
+                "median": median,
+            }
     axis.full = [p for p in periods if p not in axis.partial]
     return axis
 
@@ -257,11 +265,11 @@ def fmt(value: float | None, format: Format, unit: str | None = None) -> str:
     if value is None or (isinstance(value, float) and math.isnan(value)):
         return "no value"
     if format == "percent":
-        return f"{value * 100:.1f}%"
+        return f"{value * 100:.1f}".removesuffix(".0") + "%"
     if format == "change":
-        return f"{value * 100:+.1f}%"
+        return f"{value * 100:+.1f}".removesuffix(".0") + "%"
     if format == "ratio":
-        return f"{value:.1f}×"
+        return f"{value:.1f} times"
     if format == "count":
         return f"{value:,.0f}"
     size = abs(value)

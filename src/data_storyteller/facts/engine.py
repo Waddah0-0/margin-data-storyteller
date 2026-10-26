@@ -195,6 +195,7 @@ def over_time(ctx: Context, book: FactBook) -> None:
             n=rows,
             confidence="high",
             caveats=[f"Totals that include {period} cover only part of it."],
+            components=dict(time.partial_numbers.get(period, {})),
             importance=0.6,
             sql=f"SELECT CAST(COUNT(*) AS DOUBLE) FROM data WHERE {time.sql} = {lit(period)}",
         )
@@ -280,6 +281,7 @@ def _change(  # noqa: PLR0913
             "after": new,
             "before_period": a,
             "after_period": b,
+            "size": abs(change),
             "against": AGAINST[against],
         },
         method=f"{sentence(m.describe())} in {b}, compared with {against} ({a}).",
@@ -310,7 +312,7 @@ def _trend(ctx: Context, book: FactBook, m: Measure, points: list[dict]) -> None
         title=f"Trend in {m.label}",
         statement=f"Over {len(y)} {grain}s, {m.label} {direction}"
         + (f", by about {fmt(abs(per_period), 'percent')} a {grain}" if steady else "")
-        + f" (the line explains {r2:.0%} of the ups and downs).",
+        + f" (the line explains {fmt(r2, 'percent')} of the ups and downs).",
         metric=m.name or None,
         period=_span([p["label"] for p in points]),
         value=float(slope),
@@ -318,7 +320,12 @@ def _trend(ctx: Context, book: FactBook, m: Measure, points: list[dict]) -> None
         unit=m.unit,
         metric_format=m.format,
         metric_label=m.label,
-        components={"per_period": per_period, "r2": r2, "periods": float(len(y))},
+        components={
+            "per_period": per_period,
+            "per_period_size": abs(per_period),
+            "r2": r2,
+            "periods": float(len(y)),
+        },
         method=f"A straight line fitted to {m.describe()} in each full {grain}.",
         n=sum(int(p["n"] or 0) for p in points),
         confidence="high" if len(y) >= 6 and r2 >= 0.5 else "medium" if len(y) >= 4 else "low",

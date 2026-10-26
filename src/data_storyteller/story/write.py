@@ -13,10 +13,10 @@ from collections.abc import Callable
 
 from margin_core.llm import LLMClient, Message
 
-from data_storyteller.models import Draft, FactsReport, Story, StoryAction, StoryPage, StorySentence
+from data_storyteller.models import Draft, FactsReport, Story, StoryPage, StorySentence
 from data_storyteller.story import template, validate
 from data_storyteller.story.plan import TITLES, StoryPlan
-from data_storyteller.story.tokens import TOKEN, fact_values, render, values
+from data_storyteller.story.tokens import TOKEN, fact_values, render, tokenized, values
 
 MAX_DRAFTS = 3
 
@@ -37,14 +37,14 @@ Rules:
    ("Sales by category").
 7. One message per page. The headline is one sentence; at most four short body
    sentences.
-8. On the actions page, each action is a hypothesis with a concrete check, not an instruction.
+8. Write no actions: leave each page's actions empty.
 9. Plain English: no jargon, no hype, no exclamation marks, no questions."""
 
 PURPOSE = {
     "pulse": "the main number, and how it moves over time",
     "drivers": "where the main number comes from, and which groups changed it",
     "nuance": "gaps between groups, numbers that move together, surprises and traps",
-    "actions": "two or three hypotheses worth testing next, each with a concrete check",
+    "actions": "hypotheses to test next (written by rules, not by you)",
 }
 
 
@@ -56,13 +56,14 @@ def prompt(plan: StoryPlan, report: FactsReport, about: str) -> str:
     lines.append("")
     lines.append("Pages, in order:")
     for page in plan.pages:
+        if page.role == "actions":
+            continue
         lines.append(f'- page "{page.id}": {PURPOSE[page.role]}.')
-        if page.role != "actions":
-            lines.append(f"  Its headline must rest on {page.headline.id}.")
+        lines.append(f"  Its headline must rest on {page.headline.id}.")
         for fact in page.facts:
-            tokens = ", ".join(f"{k}={v}" for k, v in fact_values(fact).items())
-            lines.append(f"  {fact.id} ({fact.confidence} confidence): {fact.statement}")
-            lines.append(f"    Tokens: {tokens}")
+            tokens = ", ".join(f"{k} is {v}" for k, v in fact_values(fact).items())
+            lines.append(f"  {fact.id} ({fact.confidence} confidence): {tokenized(fact)}")
+            lines.append(f"    Its tokens (for your judgement; write the token): {tokens}")
             for caveat in fact.caveats:
                 lines.append(f"    Caveat: {caveat}")
     lines.append("")
@@ -76,6 +77,8 @@ def to_story(draft: Draft, plan: StoryPlan, report: FactsReport) -> Story:
     pages = []
     for page in draft.pages:
         planned = by_id[page.page]
+        if planned.role == "actions":
+            continue
 
         def sentence(text: str, fact_ids: list[str]) -> StorySentence:
             return StorySentence(text=render(text, table), fact_ids=fact_ids)
@@ -87,17 +90,11 @@ def to_story(draft: Draft, plan: StoryPlan, report: FactsReport) -> Story:
                 title=render(page.title, table) or TITLES[planned.role],
                 headline=sentence(page.headline.text, page.headline.fact_ids),
                 body=[sentence(s.text, s.fact_ids) for s in page.body],
-                actions=[
-                    StoryAction(
-                        text=render(a.text, table),
-                        check=render(a.check, table),
-                        fact_ids=a.fact_ids,
-                    )  # fmt: skip
-                    for a in page.actions
-                ],
                 fact_ids=[f.id for f in planned.facts],
             )
         )
+    if "actions" in by_id:
+        pages += [p for p in template.write(plan, "").pages if p.role == "actions"]
     return Story(title=render(draft.title, table), shape=plan.shape, pages=pages,
                  written_by="model", context=plan.context)  # fmt: skip
 
@@ -129,7 +126,11 @@ async def write(
             story.attempts, story.rejected = attempt - 1, rejected
             return story
         found = validate.problems(draft, plan, report, columns, plan.context)
-        missing = [p.id for p in plan.pages if p.id not in {d.page for d in draft.pages}]
+        missing = [
+            p.id
+            for p in plan.pages
+            if p.id not in {d.page for d in draft.pages} and p.role != "actions"
+        ]
         found += [f'Page "{p}" is missing.' for p in missing]
         if not found:
             story = to_story(draft, plan, report)

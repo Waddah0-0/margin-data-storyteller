@@ -23,6 +23,7 @@ from data_storyteller.facts.base import (
 from data_storyteller.facts.relations import adjust
 
 TOP_SHARE = 0.2  # concentration: the share of the main number from the top fifth
+TARGET_SHARE = 0.8  # and how many it takes to make this share of it
 MIN_CHANGE = 0.10  # a group's change worth a fact
 MAX_MOVERS = 3
 
@@ -89,15 +90,17 @@ def concentration(ctx: Context, book: FactBook) -> None:
         for v in values:
             running += v
             needed += 1
-            if running >= 0.8 * total:
+            if running >= TARGET_SHARE * total:
                 break
         concentrated = share >= 0.5
         e = q(entity)
         book.add(
             kind="concentration",
             title=f"How concentrated {m.label} is among {readable(entity)} values",
-            statement=f"The top {TOP_SHARE:.0%} of {entity} values ({k:,} of {len(values):,}) "
-            f"bring {fmt(share, 'percent')} of {m.label}; {needed:,} of them bring 80%.",
+            statement=f"The top {fmt(TOP_SHARE, 'percent')} of {entity} values "
+            f"({fmt(k, 'count')} of {fmt(len(values), 'count')}) bring "
+            f"{fmt(share, 'percent')} of {m.label}; {fmt(needed, 'count')} of them bring "
+            f"{fmt(TARGET_SHARE, 'percent')}.",
             metric=m.name or None,
             dimension=entity,
             value=share,
@@ -105,7 +108,13 @@ def concentration(ctx: Context, book: FactBook) -> None:
             unit=m.unit,
             metric_format=m.format,
             metric_label=m.label,
-            components={"top": float(k), "entities": float(len(values)), "for_80": float(needed)},
+            components={
+                "top": float(k),
+                "entities": float(len(values)),
+                "for_80": float(needed),
+                "top_share": TOP_SHARE,
+                "target_share": TARGET_SHARE,
+            },
             method=f"{sentence(m.describe())} for each {entity}, largest first; the share "
             f"of the largest {TOP_SHARE:.0%}.",
             n=len(ctx.frame),
@@ -160,8 +169,9 @@ def member_changes(ctx: Context, book: FactBook) -> None:
                         old_rows[m.name].dropna().astype("float64"),
                         equal_var=False,
                     ).pvalue)  # fmt: skip
-                moves.append((dim, member, change, old, new, n_old + n_new, p))
-        q_values = adjust([x[-1] for x in moves]) if tested and moves else [0.0] * len(moves)
+                weight = len(new_rows) / max(len(after), 1)
+                moves.append((dim, member, change, old, new, n_old + n_new, p, weight))
+        q_values = adjust([x[6] for x in moves]) if tested and moves else [0.0] * len(moves)
         kept = [x for x, qv in zip(moves, q_values, strict=True)
                 if abs(x[2]) >= MIN_CHANGE and qv < 0.05]  # fmt: skip
         for dim in ctx.dimensions:
@@ -176,14 +186,14 @@ def _member_fact(  # noqa: PLR0913
     ctx: Context,
     book: FactBook,
     m: Measure,
-    move: tuple[str, str, float, float, float, int, float],
+    move: tuple[str, str, float, float, float, int, float, float],
     first: list[str],
     last: list[str],
     tested: bool,
     overall: float,
 ) -> None:
     assert ctx.time is not None
-    dim, member, change, old, new, n, _ = move
+    dim, member, change, old, new, n, _, weight = move
     a = first[0] if len(first) == 1 else f"{first[0]} to {first[-1]}"
     b = last[0] if len(last) == 1 else f"{last[0]} to {last[-1]}"
     word = ("rose" if change > 0 else "fell") if tested else ("grew" if change > 0 else "shrank")
@@ -204,14 +214,14 @@ def _member_fact(  # noqa: PLR0913
         unit=m.unit,
         metric_format=m.format,
         metric_label=m.label,
-        components={"before": old, "after": new, "overall_change": overall},
+        components={"before": old, "after": new, "size": abs(change), "overall_change": overall},
         method=f"{sentence(m.describe())} for {member} in {b}, against {a}: the first and last "
         "thirds of the full periods"
         + ("; a Welch t-test, corrected for the number of groups." if tested else "."),
         n=n,
         confidence=confidence(n),
         # telling in proportion to how far it moved from the overall change
-        importance=min(1.0, 0.4 + abs(change - overall)),
+        importance=min(1.0, 0.35 + abs(change - overall) + 0.3 * weight),
         sql=f"SELECT ({new_sql} - {old_sql}) / abs({old_sql}) FROM data",
     )
 

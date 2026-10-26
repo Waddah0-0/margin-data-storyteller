@@ -94,11 +94,11 @@ def segment_gaps(ctx: Context, book: FactBook) -> None:
         group = readable(dim)
         mine, rest = fmt(va, m.format, m.unit), fmt(vb, m.format, m.unit)
         statement = (
-            f"For {member}, {m.label} is {mine}: {ratio:.1f} times the {rest} of the other "
+            f"For {member}, {m.label} is {mine}: {fmt(ratio, 'ratio')} the {rest} of the other "
             f"{group} values."
             if ratio > 1
             else f"For {member}, {m.label} is {mine}, against {rest} for the other {group} "
-            f"values: {1 / ratio:.1f} times lower."
+            f"values: {fmt(1 / ratio, 'ratio')} lower."
         )
         inside, outside = f"{q(dim)} = {lit(member)}", f"{q(dim)} <> {lit(member)}"
         book.add(
@@ -113,7 +113,7 @@ def segment_gaps(ctx: Context, book: FactBook) -> None:
             unit=m.unit,
             metric_format=m.format,
             metric_label=m.label,
-            components={"member": va, "rest": vb, "q_value": q_value},
+            components={"member": va, "rest": vb, "inverse": 1 / ratio, "q_value": q_value},
             method=f"{sentence(m.describe())} for {member} against all other {dim} values; "
             f"{'a two-proportion test' if m.flag else 'a Welch t-test'}, corrected for the "
             "number of comparisons.",
@@ -168,7 +168,8 @@ def correlations(ctx: Context, book: FactBook) -> None:
             kind="correlation",
             title=f"{x.label} and {y.label}",
             statement=f"{sentence(x.label)} and {y.label} {strength} {together} "
-            f"(r = {r:.2f}, {n:,} rows): rows with higher {x.label} {tendency}.",
+            f"(r = {fmt(r, 'number')}, {fmt(n, 'count')} rows): rows with higher {x.label} "
+            f"{tendency}.",
             metric=x.name,
             dimension=y.name,
             value=r,
@@ -279,14 +280,19 @@ def anomalies(ctx: Context, book: FactBook) -> None:
         who = f" for {f['member']} ({readable(f['dim'])})" if f["dim"] else ""
         high = f["z"] > 0
         times = f["value"] / f["usual"] if f["usual"] else None
-        size = f" ({times:.1f} times the usual)" if times and high else ""
+        size = f" ({fmt(times, 'ratio')} the usual)" if times and high else ""
         per_day = " per day" if m.additive and f["grain"] != "day" else ""
         book.add(
             kind="anomaly",
             title=f"{sentence(m.label)}{who} in {f['period']}",
-            statement=f"{sentence(m.label)}{who} in {f['period']} was "
-            f"{fmt(f['value'], m.format, m.unit)}, {'far above' if high else 'far below'} the "
-            f"usual {fmt(f['usual'], m.format, m.unit)}{size}.",
+            statement=(
+                f"{f['period']} had {fmt(f['value'], m.format, m.unit)} {m.label}{who}, "
+                if m.aggregation == "count"
+                else f"{sentence(m.label)}{who} in {f['period']} was "
+                f"{fmt(f['value'], m.format, m.unit)}, "
+            )
+            + f"{'far above' if high else 'far below'} the usual "
+            f"{fmt(f['usual'], m.format, m.unit)}{size}.",
             metric=m.name or None,
             dimension=f["dim"],
             member=f["member"],
@@ -296,12 +302,13 @@ def anomalies(ctx: Context, book: FactBook) -> None:
             unit=m.unit,
             metric_format=m.format,
             metric_label=m.label,
-            components={"usual": f["usual"], "robust_z": f["z"]},
+            components={"usual": f["usual"], "robust_z": f["z"]}
+            | ({"times": times} if times and high else {}),
             method=f"{sentence(m.describe())}{per_day} in each full {f['grain']}{who}, against "
             f"the median; a robust z-score of {f['z']:.1f}, where {ROBUST_Z} or more stands out.",
             n=f["n"],
             confidence=confidence(f["n"]),
-            importance=min(1.0, 0.5 + abs(f["z"]) / 20),
+            importance=min(1.0, 0.4 + abs(f["z"]) / 20),
             sql=f"SELECT {m.sql(f['where'])} FROM data",
         )
     _outlier_rows(ctx, book)
@@ -404,7 +411,12 @@ def simpsons(ctx: Context, book: FactBook) -> None:
                 unit=m.unit,
                 metric_format=m.format,
                 metric_label=m.label,
-                components={"before": overall_before, "after": overall_after},
+                components={"before": overall_before, "after": overall_after}
+                | {
+                    f"m{i}_{part}": value
+                    for i, (member, vb, va) in enumerate(moves, 1)
+                    for part, value in (("name", member), ("before", vb), ("after", va))
+                },
                 method=f"{sentence(m.describe())} overall and within each {dim}, in the "
                 "first and last thirds of the full periods (Simpson's paradox).",
                 n=m.n(early) + m.n(late),

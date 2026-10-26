@@ -23,7 +23,8 @@ from data_storyteller.story.plan import StoryPlan
 from data_storyteller.story.tokens import TOKEN, values
 
 CAUSAL = re.compile(
-    r"\b(because( of)?|due to|caused|causes|causing|drove|drives|driven|driving|led to|leads to|"
+    r"\b(because( of)?|due to|caused|causes|causing|drove|drive|drives|driven|driving|led to|"
+    r"leads to|lead to|"
     r"resulted in|results in|as a result|thanks to|owing to|attributable to|responsible for|"
     r"triggered|fuel(?:l)?ed|boosted by|hurt by)\b",
     re.IGNORECASE,
@@ -44,6 +45,11 @@ HEDGE = re.compile(
     re.IGNORECASE,
 )
 NUMBER = re.compile(r"\d")
+HYPE = re.compile(
+    r"\b(significant(ly)?|dramatic(ally)?|huge(ly)?|massive(ly)?|soar(ed|ing)?|"
+    r"skyrocket(ed|ing)?|plummet(ed|ing)?|explod(ed|ing)|staggering|remarkabl[ey])\b",
+    re.IGNORECASE,
+)
 WORD = re.compile(r"[A-Za-z][A-Za-z'’-]*")
 SIGNED = {"period_change", "member_change", "trend", "simpsons"}
 CALENDAR = {
@@ -85,6 +91,10 @@ def problems(
     found: list[str] = []
 
     simpsons = {f.metric for f in report.facts if f.kind == "simpsons"}
+    # the story's own title may draw on any planned fact, under the same rules
+    every = {f.id for p in plan.pages for f in p.facts}
+    title = DraftSentence(text=draft.title, fact_ids=[])
+    found += _sentence("In the story title", title, facts, every, table, words, named, context)
     for page in draft.pages:
         if page.page not in pages:
             found.append(f'Page "{page.page}" is not in the plan; use {", ".join(pages)}.')
@@ -99,6 +109,9 @@ def problems(
             for i, a in enumerate(page.actions)
         ]
         cited_on_page: set[str] = set()
+        texts = [s.text.strip().lower() for _, s in sentences[1:]]
+        if len(texts) != len(set(texts)):
+            found.append(f"{where}: a sentence is repeated; say each thing once.")
         for label, s in sentences:
             found += _sentence(f"{where}, {label}", s, facts, allowed, table, words, named, context)
             cited_on_page |= set(s.fact_ids) | {m.group(1) for m in TOKEN.finditer(s.text)}
@@ -152,14 +165,29 @@ def _sentence(  # noqa: PLR0913
             if word[0].isupper() and word.lower().strip("'’") not in words:
                 found.append(f'{where}: "{word}" is not a name in the data.')
 
-    if CAUSAL.search(plain) and not (context and s.uses_context):
+    cited = [facts[i] for i in set(s.fact_ids) | {t[1:5] for t in tokens} if i in facts]
+    method_only = bool(cited) and all(f.kind == "partial_period" for f in cited)
+    if HYPE.search(plain):
+        found.append(
+            f'{where}: "{HYPE.search(plain).group(0)}" overstates; say what changed and by how '  # type: ignore[union-attr]
+            'much ("significant" also claims a statistical test that was not made).'
+        )
+    if CAUSAL.search(plain) and not (context and s.uses_context) and not method_only:
         found.append(
             f'{where}: "{CAUSAL.search(plain).group(0)}" gives a cause; the data only shows '  # type: ignore[union-attr]
             'association. Use words like "coincides with" or "is associated with", or rely '
             "on the person's context (uses_context)."
         )
 
-    cited = [facts[i] for i in set(s.fact_ids) | {t[1:5] for t in tokens} if i in facts]
+    if UP.search(plain) or DOWN.search(plain):
+        for token in tokens:
+            fact = facts.get(token[1:5])
+            if fact and fact.format == "change" and token == f"{{{fact.id}}}":
+                found.append(
+                    f'{where}: after a word like "rose" or "fell", write the size '
+                    f"{{{fact.id}.size}} rather than the signed {token} "
+                    f"({table.get(token, '')})."
+                )
     signed = [f for f in cited if f.kind in SIGNED]
     if len(signed) == 1:
         fact = signed[0]

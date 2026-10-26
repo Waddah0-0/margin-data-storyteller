@@ -195,6 +195,28 @@ def test_low_confidence_facts_must_be_hedged(
     assert not any("low confidence" in p for p in check(draft, ecommerce))
 
 
+def test_the_title_hype_signs_and_repeats_are_checked(
+    ecommerce: tuple[FactsReport, StoryPlan, list[str]],
+) -> None:
+    report, plan, _ = ecommerce
+    draft = good_draft(plan, report)
+    draft.title = "Sales growth driven by technology"
+    assert any("story title" in p and "gives a cause" in p for p in check(draft, ecommerce))
+
+    head = plan.pages[0].headline.id
+    hype = with_headline(plan, report, sentence(f"Sales rose significantly, {{{head}}}.", head))
+    assert any("overstates" in p for p in check(hype, ecommerce))
+
+    signed = with_headline(plan, report, sentence(f"Sales rose {{{head}}}.", head))
+    assert any(f"{{{head}.size}}" in p for p in check(signed, ecommerce))
+    sized = with_headline(plan, report, sentence(f"Sales rose {{{head}.size}}.", head))
+    assert not any("signed" in p for p in check(sized, ecommerce))
+
+    repeated = good_draft(plan, report)
+    repeated.pages[0].body = [repeated.pages[0].headline]
+    assert any("repeated" in p for p in check(repeated, ecommerce))
+
+
 # ---- the writer -------------------------------------------------------------------------
 
 
