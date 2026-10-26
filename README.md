@@ -2,8 +2,8 @@
 
 Cleans a table of data, shows every change it made, and tells the story in it with charts.
 
-> **Status: planned.** Cleaning, facts and the written story work and are tested. The charts
-> and the Power BI export are being built.
+> **Status: experimental.** Cleaning, facts and the written story work and are tested, also
+> with a local model. The charts and the Power BI export are being built.
 
 ## What it does
 

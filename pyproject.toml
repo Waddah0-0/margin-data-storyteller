@@ -29,9 +29,8 @@ data-storyteller = "data_storyteller.agent:DataStorytellerAgent"
 
 [tool.margin]
 id = "data-storyteller"
-stage = "planned"
-# Turn on mirroring once the agent does real work (and set stage to "experimental"):
-# mirror = "<owner>/margin-data-storyteller"
+stage = "experimental"
+mirror = "Waddah0-0/margin-data-storyteller"
 
 [build-system]
 requires = ["hatchling"]
