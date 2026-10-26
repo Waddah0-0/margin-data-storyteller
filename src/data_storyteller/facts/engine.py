@@ -25,6 +25,11 @@ from data_storyteller.models import ColumnProfile, FactsReport, StorySetup
 
 MAX_DIMENSION_MEMBERS = 20
 MIN_ENTITIES = 20
+AGAINST = {
+    "the period before": "previous",
+    "a year before": "year",
+    "the start of the data": "start",
+}
 
 
 def _noun(setup: StorySetup) -> str:
@@ -141,6 +146,8 @@ def totals(ctx: Context, book: FactBook) -> None:
             value=value,
             format=m.format,
             unit=m.unit,
+            metric_format=m.format,
+            metric_label=m.label,
             method=f"{sentence(m.describe())} over every row{scope}.",
             n=m.n(rows),
             confidence=confidence(m.n(rows)),
@@ -208,6 +215,8 @@ def over_time(ctx: Context, book: FactBook) -> None:
             value=last["value"],
             format=m.format,
             unit=m.unit,
+            metric_format=m.format,
+            metric_label=m.label,
             points=points,
             method=f"{sentence(m.describe())} in each full {time.grain}.",
             n=sum(int(p["n"]) for p in points),
@@ -264,7 +273,15 @@ def _change(  # noqa: PLR0913
         value=change,
         format="change",
         unit=m.unit,
-        components={"before": old, "after": new, "before_period": a, "after_period": b},
+        metric_format=m.format,
+        metric_label=m.label,
+        components={
+            "before": old,
+            "after": new,
+            "before_period": a,
+            "after_period": b,
+            "against": AGAINST[against],
+        },
         method=f"{sentence(m.describe())} in {b}, compared with {against} ({a}).",
         n=n,
         confidence=confidence(min(m.n(old_rows), m.n(new_rows))),
@@ -299,6 +316,8 @@ def _trend(ctx: Context, book: FactBook, m: Measure, points: list[dict]) -> None
         value=float(slope),
         format=m.format if m.format != "count" else "number",
         unit=m.unit,
+        metric_format=m.format,
+        metric_label=m.label,
         components={"per_period": per_period, "r2": r2, "periods": float(len(y))},
         method=f"A straight line fitted to {m.describe()} in each full {grain}.",
         n=sum(int(p["n"] or 0) for p in points),

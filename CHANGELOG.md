@@ -34,3 +34,8 @@ All notable changes to this agent are documented here. The format follows
   0.0001, or the run fails.
 - Link ids that repeat (a customer id in an orders table), columns of years, and 0/1 flags
   are recognised.
+- Writes the story: a second checkpoint to choose the insights and give context; pages laid
+  out by rules; a model writes with fact tokens instead of numbers; a validator refuses
+  typed numbers, unknown names, wrong directions, unsupported causes, unhedged
+  low-confidence claims and paradox-blind quotes, and sends the problems back twice at
+  most; a template writes the story when the model is missing or keeps failing.

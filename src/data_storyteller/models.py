@@ -169,6 +169,12 @@ class Fact(BaseModel):
         description="How to show value: percent and change are fractions (0.2 = 20%)."
     )
     unit: str | None = Field(default=None, description="Currency of the metric, if any.")
+    metric_format: Literal["number", "percent", "change", "count", "ratio"] = Field(
+        default="number", description="How the metric's own values show (components)."
+    )
+    metric_label: str | None = Field(
+        default=None, description='The metric in words: "share damaged".'
+    )
     components: dict[str, float | str] = Field(default_factory=dict)
     points: list[Point] = Field(default_factory=list, description="A series or breakdown.")
     method: str = Field(description="How it was computed, in plain words.")
@@ -189,10 +195,82 @@ class FactsReport(BaseModel):
     check: list[str] = Field(default_factory=list, description="What the recomputation verified.")
 
 
+# ---- the story ----------------------------------------------------------------------------
+
+StoryShape = Literal["performance", "composition", "trend", "relationship", "profile"]
+PageRole = Literal["pulse", "drivers", "nuance", "actions"]
+
+
+class DraftSentence(BaseModel):
+    """A sentence as the model writes it: numbers only as fact tokens like {F012}."""
+
+    text: str = Field(description="Plain words. Every number is a token such as {F012}.")
+    fact_ids: list[str] = Field(description="The facts this sentence rests on.")
+    uses_context: bool = Field(
+        default=False, description="True only if it relies on the context the person gave."
+    )
+
+
+class DraftAction(BaseModel):
+    text: str = Field(description="A suggested next step, stated as a hypothesis.")
+    check: str = Field(description="How to test the hypothesis before acting on it.")
+    fact_ids: list[str]
+
+
+class DraftPage(BaseModel):
+    page: str = Field(description="The page id from the plan.")
+    title: str = Field(description="The page's message as a short title, not a topic.")
+    headline: DraftSentence
+    body: list[DraftSentence] = Field(default_factory=list, max_length=4)
+    actions: list[DraftAction] = Field(default_factory=list, max_length=3)
+
+
+class Draft(BaseModel):
+    """What the writer returns. The validator checks it before anything is shown."""
+
+    title: str = Field(description="The story's title: its main message in a few words.")
+    pages: list[DraftPage]
+
+
+class StorySentence(BaseModel):
+    text: str
+    fact_ids: list[str] = Field(default_factory=list)
+
+
+class StoryAction(BaseModel):
+    text: str
+    check: str
+    fact_ids: list[str] = Field(default_factory=list)
+
+
+class StoryPage(BaseModel):
+    id: str
+    role: PageRole
+    title: str
+    headline: StorySentence
+    body: list[StorySentence] = Field(default_factory=list)
+    actions: list[StoryAction] = Field(default_factory=list)
+    fact_ids: list[str] = Field(default_factory=list, description="Every fact on the page.")
+
+
+class Story(BaseModel):
+    title: str
+    shape: StoryShape
+    pages: list[StoryPage]
+    written_by: Literal["model", "template"]
+    model: str | None = None
+    attempts: int = Field(default=0, description="Drafts the model wrote.")
+    rejected: list[str] = Field(
+        default_factory=list, description="What the validator refused in earlier drafts."
+    )
+    context: str | None = Field(default=None, description="Context the person gave.")
+
+
 class DataStorytellerOutput(BaseModel):
     source: SourceInfo
     cleaning: CleaningReport
     columns: list[ColumnProfile]
     setup: StorySetup | None = None
     facts: FactsReport | None = None
+    story: Story | None = None
     files: list[str] = Field(default_factory=list, description="Files written.")

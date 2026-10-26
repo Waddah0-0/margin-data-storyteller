@@ -86,12 +86,14 @@ async def test_writes_the_clean_file_and_the_report(messy: dict[str, Path], tmp_
 async def test_story_mode_sets_up_the_story(messy: dict[str, Path]) -> None:
     responder = Scripted(grain="one department per row")
     result = await run(messy["no_date_data"], responder, stop_after="story")
-    assert result.status == "partial"
-    assert "not written yet" in result.warnings[-1]
+    assert result.status == "ok", result.error
+    assert "written from a template" in result.warnings[-1]  # no model in this test
     assert result.data["facts"]["facts"] and "all agree" in result.data["facts"]["check"][0]
-    (batch,) = responder.batches
+    assert result.data["story"]["written_by"] == "template"
+    check, story = responder.batches
     # headcount is a level, so budget is the only number that adds up: nothing to ask
-    assert {q.id for q in batch.questions} == {"grain"}
+    assert {q.id for q in check.questions} == {"grain"}
+    assert story.title == "Choose the story" and "context" in {q.id for q in story.questions}
     setup = result.data["setup"]
     assert setup["north_star"] == "budget" and setup["grain"] == "one department per row"
     assert setup["aggregations"]["headcount"] == "last"

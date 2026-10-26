@@ -145,6 +145,35 @@ def findings(data: DataStorytellerOutput, answers: dict[str, Answer]) -> list[Fi
         )
     )
 
+    if data.story is not None:
+        facts = {f.id: f for f in (data.facts.facts if data.facts else [])}
+        pages = []
+        for page in data.story.pages:
+            evidence = [
+                Evidence(
+                    kind="fact" if s.fact_ids else "note",
+                    location=", ".join(s.fact_ids) or None,
+                    detail=s.text,
+                )
+                for s in page.body
+            ]
+            evidence += [
+                Evidence(
+                    kind="to test",
+                    location=", ".join(a.fact_ids) or None,
+                    detail=f"{a.text} How: {a.check}",
+                )  # fmt: skip
+                for a in page.actions
+            ]
+            evidence += [
+                Evidence(kind="caveat", location=i, detail=c)
+                for i in page.fact_ids
+                if i in facts and facts[i].kind not in ("partial_period", "simpsons")
+                for c in facts[i].caveats
+            ]
+            pages.append(Finding(title=page.title, summary=page.headline.text, evidence=evidence))
+        return pages + found  # the story first, then how the data was cleaned
+
     if data.facts is not None and data.facts.facts:
         top = sorted(data.facts.facts, key=lambda f: -f.importance)[:TOP_FACTS]
         found.append(
@@ -190,6 +219,10 @@ def summary(data: DataStorytellerOutput, assumed: int) -> str:
         parts.append(
             f"{assumed} decision{'s were' if assumed != 1 else ' was'} assumed, not confirmed."
         )
+    if data.story is not None and data.story.pages:
+        lead = data.story.pages[0].headline.text
+        by = "a model" if data.story.written_by == "model" else "a template"
+        parts = [f"{data.story.title}. {lead}", f"(Story written by {by}.)", *parts]
     return " ".join(parts)
 
 

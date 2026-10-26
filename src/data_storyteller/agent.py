@@ -8,7 +8,7 @@ from pathlib import Path
 from margin_core import AgentResult, Answer, BaseAgent, Choice, Question, RunContext
 from margin_core.models import ResultStatus
 
-from data_storyteller import cleaning, facts, report, setup
+from data_storyteller import cleaning, facts, report, setup, story
 from data_storyteller.ingest import Source, read_source
 from data_storyteller.models import DataStorytellerInput, DataStorytellerOutput
 from data_storyteller.profile import profile
@@ -24,6 +24,7 @@ class DataStorytellerAgent(BaseAgent):
     InputModel = DataStorytellerInput
     OutputModel = DataStorytellerOutput
     primary_input = "dataset"
+    uses_llm = True  # to write the story; cleaning and facts never call a model
 
     async def run(self, input: DataStorytellerInput, ctx: RunContext) -> AgentResult:
         ctx.report_progress("read", f"Reading {Path(input.dataset).name}", 0.05)
@@ -64,13 +65,34 @@ class DataStorytellerAgent(BaseAgent):
             data.setup, problems = setup.resolve(columns, answers)
             warnings += problems
             ctx.check_cancelled()
-            ctx.report_progress("facts", "Computing the facts, then checking each one", 0.85)
-            report_ = await asyncio.to_thread(facts.compute, clean.frame, columns, data.setup)
-            data.facts = await asyncio.to_thread(facts.verify, clean.frame, report_)
-            warnings.append(
-                "The story itself is not written yet: this run stopped after finding the facts."
+            ctx.report_progress("facts", "Computing the facts, then checking each one", 0.75)
+            found = await asyncio.to_thread(facts.compute, clean.frame, columns, data.setup)
+            data.facts = await asyncio.to_thread(facts.verify, clean.frame, found)
+
+            # checkpoint 2: what the story tells, and context only the person has
+            chosen = await ctx.ask(
+                story.questions(data.facts, data.setup.north_star),
+                title="Choose the story",
+                detail="These are the facts worth telling, each checked twice. Pick what the "
+                "story should cover.",
+                preset=input.answers,
+                assume_defaults=input.assume_defaults,
             )
-            status = "partial"
+            answers |= chosen
+            plan_ = story.build(data.facts, data.setup.north_star, chosen)
+            ctx.check_cancelled()
+            ctx.report_progress("story", "Writing the story", 0.85)
+            rows = f"{len(clean.frame):,} rows, one {data.setup.grain.removeprefix('one ')} each"
+            data.story = await story.write(
+                ctx.llm,
+                plan_,
+                data.facts,
+                about=f"Data: {source.path.name}, {rows}. Main number: "
+                f"{data.setup.north_star or 'the number of rows'}.",
+                title=f"What {source.path.name} shows",
+                columns=[c.name for c in columns],
+                warn=ctx.warn,
+            )
 
         if input.output_dir:
             ctx.report_progress("write", f"Writing to {input.output_dir}", 0.9)

@@ -59,6 +59,8 @@ def compositions(ctx: Context, book: FactBook) -> None:
             value=share,
             format="percent",
             unit=m.unit,
+            metric_format=m.format,
+            metric_label=m.label,
             components={"top_value": value, "total": total, "concentration_index": hhi},
             points=[{"label": k, "value": v, "n": c} for k, v, c in rows],
             method=f"{sentence(m.describe())} for each {dim}, as a share of the total.",
@@ -93,7 +95,7 @@ def concentration(ctx: Context, book: FactBook) -> None:
         e = q(entity)
         book.add(
             kind="concentration",
-            title=f"{sentence(m.label)} by {entity}: the top {TOP_SHARE:.0%}",
+            title=f"How concentrated {m.label} is among {readable(entity)} values",
             statement=f"The top {TOP_SHARE:.0%} of {entity} values ({k:,} of {len(values):,}) "
             f"bring {fmt(share, 'percent')} of {m.label}; {needed:,} of them bring 80%.",
             metric=m.name or None,
@@ -101,6 +103,8 @@ def concentration(ctx: Context, book: FactBook) -> None:
             value=share,
             format="percent",
             unit=m.unit,
+            metric_format=m.format,
+            metric_label=m.label,
             components={"top": float(k), "entities": float(len(values)), "for_80": float(needed)},
             method=f"{sentence(m.describe())} for each {entity}, largest first; the share "
             f"of the largest {TOP_SHARE:.0%}.",
@@ -137,6 +141,8 @@ def member_changes(ctx: Context, book: FactBook) -> None:
         )
         variants.append((per_row, True))
     for measure, tested in variants:
+        old_all, new_all = measure.compute(before), measure.compute(after)
+        overall = (new_all - old_all) / abs(old_all) if old_all and new_all is not None else 0.0
         moves = []
         for dim in ctx.dimensions:
             for member in sorted(ctx.frame[dim].dropna().astype(str).unique()):
@@ -163,7 +169,7 @@ def member_changes(ctx: Context, book: FactBook) -> None:
             gainers = sorted((x for x in mine if x[2] > 0), key=lambda x: -x[2])[:MAX_MOVERS]
             losers = sorted((x for x in mine if x[2] < 0), key=lambda x: x[2])[:MAX_MOVERS]
             for move in gainers + losers:
-                _member_fact(ctx, book, measure, move, first, last, tested)
+                _member_fact(ctx, book, measure, move, first, last, tested, overall)
 
 
 def _member_fact(  # noqa: PLR0913
@@ -174,6 +180,7 @@ def _member_fact(  # noqa: PLR0913
     first: list[str],
     last: list[str],
     tested: bool,
+    overall: float,
 ) -> None:
     assert ctx.time is not None
     dim, member, change, old, new, n, _ = move
@@ -195,13 +202,16 @@ def _member_fact(  # noqa: PLR0913
         value=change,
         format="change",
         unit=m.unit,
-        components={"before": old, "after": new},
+        metric_format=m.format,
+        metric_label=m.label,
+        components={"before": old, "after": new, "overall_change": overall},
         method=f"{sentence(m.describe())} for {member} in {b}, against {a}: the first and last "
         "thirds of the full periods"
         + ("; a Welch t-test, corrected for the number of groups." if tested else "."),
         n=n,
         confidence=confidence(n),
-        importance=min(1.0, 0.45 + abs(change)),
+        # telling in proportion to how far it moved from the overall change
+        importance=min(1.0, 0.4 + abs(change - overall)),
         sql=f"SELECT ({new_sql} - {old_sql}) / abs({old_sql}) FROM data",
     )
 

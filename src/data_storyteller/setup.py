@@ -202,6 +202,10 @@ def resolve(
         chosen = answers.get(f"aggregate:{c.name}")
         aggregations[c.name] = chosen.value if chosen else c.aggregation
         c.aggregation = aggregations[c.name]
+        if chosen:
+            c.notes = [n for n in c.notes if "added up" not in n]
+            who = "you said" if chosen.source != "default" else "assumed, not confirmed:"
+            c.reason = f"{who} {chosen.label.lower()}"
 
     summable = [c.name for c in _measures(columns) if c.aggregation == "sum"]
     north = answers["north_star"].value if "north_star" in answers else None

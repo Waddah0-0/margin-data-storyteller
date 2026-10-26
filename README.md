@@ -2,8 +2,8 @@
 
 Cleans a table of data, shows every change it made, and tells the story in it with charts.
 
-> **Status: planned.** The cleaning and the facts work and are tested. The written story and
-> the charts are being built; until then, `stop_after="story"` stops after the facts.
+> **Status: planned.** Cleaning, facts and the written story work and are tested. The charts
+> and the Power BI export are being built.
 
 ## What it does
 
@@ -44,6 +44,17 @@ trust the numbers before working with them.
    computed, on how many rows, and how sure it is.
 8. **Check every fact** by computing it again in DuckDB from SQL written separately. Any
    disagreement fails the run.
+9. **Choose the story** (the second checkpoint): the insights worth telling, best first,
+   and any context only you know, such as a price change or a campaign. Only that context
+   lets the story give a reason for something; otherwise it describes associations.
+10. **Write the story.** Rules lay out the pages: how the main number moved, what drives
+    it, what else stands out, and hypotheses to test next. A model writes the words, but
+    never types a number: it refers to facts by id, and the numbers are filled in from the
+    facts. Before anything is shown, a validator refuses a draft that types a number, names
+    something not in the data, says "rose" for a fall, gives an unsupported cause, states a
+    low-confidence fact without hedging it, or quotes a change that Simpson's paradox makes
+    misleading. The model gets the problems back, twice at most; after that, or without a
+    model, the story is written from a template built from the facts' own sentences.
 
 ## Input
 
@@ -51,7 +62,7 @@ trust the numbers before working with them.
 |---|---|---|
 | `dataset` | required | Path to the file. The primary input. |
 | `table` | asked | The sheet or table, when the file has more than one. |
-| `stop_after` | `clean` | `clean`, or `story` to also set up the story (the main number, what one row is, how numbers add up) and find its facts. The written story is not built yet. |
+| `stop_after` | `clean` | `clean`, or `story` to also set up the story (the main number, what one row is, how numbers add up), find its facts and write it. |
 | `output_dir` | none | A folder for the cleaned table (`<name>.clean.csv`) and the report (`<name>.cleaning.json`). Nothing is written without it. |
 | `answers` | `{}` | Answers given up front, by question id, for example `{"date_order:order_date": "dmy"}`. These are not asked. |
 | `assume_defaults` | `false` | Ask nothing and take every suggested answer. Each one is marked as not confirmed. |
@@ -75,11 +86,14 @@ are listed in the report under `answers`.
 - `facts`: with `stop_after="story"`, the time axis, the periods left out as partial, and
   every fact: its number, a plain sentence, how it was computed, rows behind it, confidence,
   caveats, how much it matters, the SQL that recomputed it, and whether it matched.
+- `story`: with `stop_after="story"`, the title, shape and pages (title, headline, body,
+  actions to test, and the facts behind each sentence), who wrote it (`model` or
+  `template`), how many drafts the model wrote, and what the validator refused.
 - `files`: the files written to `output_dir`.
 
-Findings: one per change, each with its evidence; one per column note (personal data, a
-column that is mostly empty); the final check; and, in story mode, the ten facts that
-matter most.
+Findings: in story mode, the story first, one finding per page; then one per change, each
+with its evidence; one per column note (personal data, a column that is mostly empty); and
+the final check.
 
 ## Limits
 
@@ -92,6 +106,9 @@ matter most.
 - Facts describe associations. A correlation or a gap between groups is never stated as a
   cause. Groups under 30 rows are not compared, and p-values are corrected for the number of
   tests.
+- The model only ever sees facts (aggregates) and column names, never a row of data or a
+  personal-data column. With a hosted model (Anthropic or OpenAI) those facts are sent to
+  that company; the default is a model on your own machine.
 - Old `.xls` workbooks are not supported; save them as `.xlsx` or CSV. Excel formulas are
   never run: the values Excel last saved are used.
 

@@ -111,6 +111,8 @@ def segment_gaps(ctx: Context, book: FactBook) -> None:
             value=ratio,
             format="ratio",
             unit=m.unit,
+            metric_format=m.format,
+            metric_label=m.label,
             components={"member": va, "rest": vb, "q_value": q_value},
             method=f"{sentence(m.describe())} for {member} against all other {dim} values; "
             f"{'a two-proportion test' if m.flag else 'a Welch t-test'}, corrected for the "
@@ -171,13 +173,15 @@ def correlations(ctx: Context, book: FactBook) -> None:
             dimension=y.name,
             value=r,
             format="number",
-            components={"spearman": rho, "q_value": q_value},
+            components={"spearman": rho, "q_value": q_value}
+            | ({"both_sums": 1.0} if x.additive and y.additive else {}),
             method="Pearson correlation over rows with both values, checked with Spearman's "
             "rank correlation, corrected for the number of pairs tested.",
             n=n,
             confidence=confidence(n),
             caveats=["An association, not proof that one causes the other."],
-            importance=min(1.0, 0.3 + abs(r) * 0.6),
+            # two summed numbers (sales and profit) move together by construction: less telling
+            importance=min(1.0, 0.3 + abs(r) * 0.6) * (0.5 if x.additive and y.additive else 1),
             sql=f"SELECT corr(CAST({q(x.name)} AS DOUBLE), CAST({q(y.name)} AS DOUBLE)) FROM data "
             f"WHERE {q(x.name)} IS NOT NULL AND {q(y.name)} IS NOT NULL",
         )
@@ -290,6 +294,8 @@ def anomalies(ctx: Context, book: FactBook) -> None:
             value=f["value"],
             format=m.format,
             unit=m.unit,
+            metric_format=m.format,
+            metric_label=m.label,
             components={"usual": f["usual"], "robust_z": f["z"]},
             method=f"{sentence(m.describe())}{per_day} in each full {f['grain']}{who}, against "
             f"the median; a robust z-score of {f['z']:.1f}, where {ROBUST_Z} or more stands out.",
@@ -324,6 +330,8 @@ def _outlier_rows(ctx: Context, book: FactBook) -> None:
         value=float(len(above)),
         format="count",
         unit=m.unit,
+        metric_format=m.format,
+        metric_label=m.label,
         components={"threshold": float(fence), "share": float(above.sum() / values.sum())},
         method="Values above the third quartile plus three times the interquartile range.",
         n=len(values),
@@ -394,6 +402,8 @@ def simpsons(ctx: Context, book: FactBook) -> None:
                 value=overall,
                 format="number",
                 unit=m.unit,
+                metric_format=m.format,
+                metric_label=m.label,
                 components={"before": overall_before, "after": overall_after},
                 method=f"{sentence(m.describe())} overall and within each {dim}, in the "
                 "first and last thirds of the full periods (Simpson's paradox).",
