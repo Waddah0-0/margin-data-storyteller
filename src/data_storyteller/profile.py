@@ -130,6 +130,9 @@ SUM = {
     "earnings",
     "cash",
     "flow",
+    "mrr",
+    "arr",
+    "bookings",
 }
 YEAR = {"year", "yr", "fy"}
 FREE_TEXT = {
@@ -247,9 +250,15 @@ def classify(
     if kind == "date":
         return "time", "none", "it holds dates"
     unique = values.nunique() >= 0.9 * len(values) and len(values) > 1
+    id_reason = (
+        "named like an id, and its values are unique"
+        if unique
+        else "named like an id; its values repeat, so it links rows to something else, "
+        "like a customer"
+    )
     if kind == "text":
-        if id_like(name) and unique:
-            return "identifier", "count_distinct", "named like an id, and its values are unique"
+        if id_like(name):
+            return "identifier", "count_distinct", id_reason
         lengths = values.astype(str).str.len().mean()
         if words & FREE_TEXT or lengths > 40:
             return "free_text", "none", "it holds sentences, not categories"
@@ -257,10 +266,18 @@ def classify(
 
     # numbers
     integral = bool((values.astype(float) % 1 == 0).all())
-    if id_like(name) and integral and unique and not words & SUM:
-        return "identifier", "count_distinct", "named like an id, and its values are unique"
-    if words & YEAR and integral and values.between(1900, 2100).all():
+    named = words & (SUM | AVERAGE | LAST | RATIO)
+    if id_like(name) and integral and not words & SUM:
+        return "identifier", "count_distinct", id_reason
+    years = integral and bool(values.between(1900, 2100).all())
+    if years and (words & YEAR or (values.nunique() <= 30 and not named)):
         return "time", "none", "it holds years"
+    if integral and set(values.unique().tolist()) == {0, 1} and not words & SUM:
+        return (
+            "measure",
+            "average",
+            "a yes/no flag (0 or 1): its average is the share of rows where it is 1",
+        )
     fractions = bool(values.between(-1, 1).all())
     if unit == "%" or words & RATIO or (words & MAYBE_RATIO and fractions):
         why = "its values are percentages" if unit == "%" else "its name says it is a rate"
@@ -341,10 +358,6 @@ def _quality(p: ColumnProfile, rows: int) -> list[str]:
         notes.append("Every row has the same value.")
     if rows and p.missing > rows / 2:
         notes.append(f"Mostly empty: {p.missing:,} of {rows:,} rows have no value.")
-    if p.role != "identifier" and id_like(p.name) and 0 < p.distinct < p.count and p.type != "date":
-        repeated = p.count - p.distinct
-        verb = "values repeat" if repeated != 1 else "value repeats"
-        notes.append(f"Named like an id, but {repeated:,} {verb}.")
     if p.type == "number" and p.aggregation == "unknown":
         notes.append("Not clear whether these numbers can be added up.")
     return notes

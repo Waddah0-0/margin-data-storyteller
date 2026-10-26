@@ -17,6 +17,8 @@ from data_storyteller.names import tokens
 MAIN_NUMBERS = (
     "revenue",
     "sales",
+    "mrr",
+    "arr",
     "profit",
     "income",
     "amount",
@@ -31,6 +33,7 @@ MAIN_NUMBERS = (
 WIDE = 25  # more columns than this: ask which to focus on
 FOCUS_CHOICES = 20
 MAX_AGGREGATION_QUESTIONS = 8
+DURATIONS = {"days", "day", "hours", "minutes", "months", "weeks", "years", "duration", "time"}
 
 AGGREGATION_CHOICES = [
     Choice(value="sum", label="Add them up", detail="Like sales or units"),
@@ -65,7 +68,7 @@ def questions(columns: list[ColumnProfile]) -> list[Question]:
                 detail=c.reason[:1].upper() + c.reason[1:] + ".",
                 section="Story setup",
                 choices=AGGREGATION_CHOICES,
-                default="sum",
+                default="average" if set(tokens(c.name)) & DURATIONS else "sum",
                 evidence=[
                     Evidence(
                         kind="values",
@@ -111,7 +114,7 @@ def questions(columns: list[ColumnProfile]) -> list[Question]:
             )
         )
 
-    dates = [c for c in columns if c.role == "time" and c.type == "date"]
+    dates = [c for c in columns if c.role == "time"]
     if len(dates) > 1:
         found.append(
             Question(
@@ -123,7 +126,7 @@ def questions(columns: list[ColumnProfile]) -> list[Question]:
             )
         )
 
-    ids = [c for c in columns if c.role == "identifier"]
+    ids = [c for c in columns if c.role == "identifier" and c.distinct == c.count]
     grains = [
         Choice(value=c.name, label=f"One {_thing(c.name)}", detail=f"Each {c.name} once")
         for c in ids
@@ -210,7 +213,7 @@ def resolve(
         )
         north = None
 
-    dates = [c.name for c in columns if c.role == "time" and c.type == "date"]
+    dates = [c.name for c in columns if c.role == "time"]
     primary = (
         answers["primary_date"].value
         if "primary_date" in answers

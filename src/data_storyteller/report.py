@@ -26,6 +26,7 @@ ANSWERED = {
     "default": "Assumed, not confirmed",
 }
 READ_AS = {"number": "numbers", "date": "dates", "text": "text", "empty": "empty"}
+TOP_FACTS = 10
 
 TITLES = {
     "header": "Where the data starts",
@@ -143,6 +144,26 @@ def findings(data: DataStorytellerOutput, answers: dict[str, Answer]) -> list[Fi
             evidence=[Evidence(kind="check", detail=line) for line in data.cleaning.check],
         )
     )
+
+    if data.facts is not None and data.facts.facts:
+        top = sorted(data.facts.facts, key=lambda f: -f.importance)[:TOP_FACTS]
+        found.append(
+            Finding(
+                title="What the data says",
+                summary=f"The {len(top)} most telling of {len(data.facts.facts)} facts, each "
+                "computed twice and matched. "
+                + (data.facts.check[0] + "." if data.facts.check else ""),
+                evidence=[
+                    Evidence(
+                        kind=f"{f.confidence} confidence",
+                        location=f.id,
+                        detail=f.statement
+                        + (f" Caveat: {' '.join(f.caveats)}" if f.caveats else ""),
+                    )
+                    for f in top
+                ],
+            )
+        )
     return found
 
 

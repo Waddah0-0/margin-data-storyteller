@@ -87,7 +87,8 @@ async def test_story_mode_sets_up_the_story(messy: dict[str, Path]) -> None:
     responder = Scripted(grain="one department per row")
     result = await run(messy["no_date_data"], responder, stop_after="story")
     assert result.status == "partial"
-    assert "not built yet" in result.warnings[-1]
+    assert "not written yet" in result.warnings[-1]
+    assert result.data["facts"]["facts"] and "all agree" in result.data["facts"]["check"][0]
     (batch,) = responder.batches
     # headcount is a level, so budget is the only number that adds up: nothing to ask
     assert {q.id for q in batch.questions} == {"grain"}

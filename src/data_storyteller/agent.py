@@ -8,7 +8,7 @@ from pathlib import Path
 from margin_core import AgentResult, Answer, BaseAgent, Choice, Question, RunContext
 from margin_core.models import ResultStatus
 
-from data_storyteller import cleaning, report, setup
+from data_storyteller import cleaning, facts, report, setup
 from data_storyteller.ingest import Source, read_source
 from data_storyteller.models import DataStorytellerInput, DataStorytellerOutput
 from data_storyteller.profile import profile
@@ -63,8 +63,12 @@ class DataStorytellerAgent(BaseAgent):
         if input.stop_after == "story":
             data.setup, problems = setup.resolve(columns, answers)
             warnings += problems
+            ctx.check_cancelled()
+            ctx.report_progress("facts", "Computing the facts, then checking each one", 0.85)
+            report_ = await asyncio.to_thread(facts.compute, clean.frame, columns, data.setup)
+            data.facts = await asyncio.to_thread(facts.verify, clean.frame, report_)
             warnings.append(
-                "The story itself is not built yet: this run stopped after setting it up."
+                "The story itself is not written yet: this run stopped after finding the facts."
             )
             status = "partial"
 

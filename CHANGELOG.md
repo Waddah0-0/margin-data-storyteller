@@ -25,3 +25,12 @@ All notable changes to this agent are documented here. The format follows
 - `stop_after="story"` sets up the story: the main number, what one row is, the main date,
   how unclear numbers add up, and which columns to focus on in a wide table.
 - Writes the cleaned table as CSV and the report as JSON to `output_dir`.
+- Finds the facts for the story: totals, changes over time (with incomplete first or last
+  periods left out), trends, breakdowns and concentration, groups that grew or shrank
+  (in total and per row), gaps between groups, correlations, anomalies (also at a finer
+  time grain, per day of each period), outlier rows and Simpson's paradox. p-values are
+  corrected for the number of tests.
+- Every fact is recomputed in DuckDB from separately written SQL and must match within
+  0.0001, or the run fails.
+- Link ids that repeat (a customer id in an orders table), columns of years, and 0/1 flags
+  are recognised.

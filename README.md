@@ -2,8 +2,8 @@
 
 Cleans a table of data, shows every change it made, and tells the story in it with charts.
 
-> **Status: planned.** The cleaning works and is tested. The story and the charts are being
-> built; until then, `stop_after="story"` only sets the story up.
+> **Status: planned.** The cleaning and the facts work and are tested. The written story and
+> the charts are being built; until then, `stop_after="story"` stops after the facts.
 
 ## What it does
 
@@ -37,6 +37,13 @@ trust the numbers before working with them.
 5. **Clean, then check** the result against the file.
 6. **Describe** each column: what it holds, how its values add up (summed, averaged, or the
    latest value), and whether it looks like personal data.
+7. **Find the facts** (story mode): the totals; how the main number moves over time; where
+   it comes from and how concentrated it is; which groups grew or shrank; groups whose rates
+   differ; numbers that move together; periods that stand out; and two traps: a partial last
+   period (left out of every comparison) and Simpson's paradox. Each fact says how it was
+   computed, on how many rows, and how sure it is.
+8. **Check every fact** by computing it again in DuckDB from SQL written separately. Any
+   disagreement fails the run.
 
 ## Input
 
@@ -44,7 +51,7 @@ trust the numbers before working with them.
 |---|---|---|
 | `dataset` | required | Path to the file. The primary input. |
 | `table` | asked | The sheet or table, when the file has more than one. |
-| `stop_after` | `clean` | `clean`, or `story` to also set up the story (the main number, what one row is, how numbers add up). The story itself is not built yet. |
+| `stop_after` | `clean` | `clean`, or `story` to also set up the story (the main number, what one row is, how numbers add up) and find its facts. The written story is not built yet. |
 | `output_dir` | none | A folder for the cleaned table (`<name>.clean.csv`) and the report (`<name>.cleaning.json`). Nothing is written without it. |
 | `answers` | `{}` | Answers given up front, by question id, for example `{"date_order:order_date": "dmy"}`. These are not asked. |
 | `assume_defaults` | `false` | Ask nothing and take every suggested answer. Each one is marked as not confirmed. |
@@ -65,10 +72,14 @@ are listed in the report under `answers`.
   or %), counts, range, most common values, and notes.
 - `setup`: with `stop_after="story"`, the main number, what one row is, the main date, how
   each number adds up, and the columns to focus on.
+- `facts`: with `stop_after="story"`, the time axis, the periods left out as partial, and
+  every fact: its number, a plain sentence, how it was computed, rows behind it, confidence,
+  caveats, how much it matters, the SQL that recomputed it, and whether it matched.
 - `files`: the files written to `output_dir`.
 
 Findings: one per change, each with its evidence; one per column note (personal data, a
-column that is mostly empty, an id that repeats); and the final check.
+column that is mostly empty); the final check; and, in story mode, the ten facts that
+matter most.
 
 ## Limits
 
@@ -78,6 +89,9 @@ column that is mostly empty, an id that repeats); and the final check.
   stays in the cleaned file; only this report leaves it out.
 - How a number adds up is guessed from its name (sales add up, prices are averaged). A
   name that says nothing is asked about only in story mode.
+- Facts describe associations. A correlation or a gap between groups is never stated as a
+  cause. Groups under 30 rows are not compared, and p-values are corrected for the number of
+  tests.
 - Old `.xls` workbooks are not supported; save them as `.xlsx` or CSV. Excel formulas are
   never run: the values Excel last saved are used.
 
