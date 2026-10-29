@@ -7,8 +7,18 @@ requires-python = ">=3.11"
 license = "MIT"
 license-files = ["LICENSE"]
 authors = [{ name = "Waddah Ali" }]
-# Planned agents are never uploaded; remove this line when the agent is ready to publish.
-classifiers = ["Private :: Do Not Upload"]
+keywords = ["data-cleaning", "data-storytelling", "pandas", "duckdb", "llm", "agents"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Typing :: Typed",
+    "Topic :: Scientific/Engineering :: Information Analysis",
+]
 dependencies = [
     "margin-core>=0.1.2,<0.2",  # 0.1.2: agents can ask questions (ctx.ask)
     "duckdb>=1.1",

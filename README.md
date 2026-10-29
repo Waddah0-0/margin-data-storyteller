@@ -122,6 +122,7 @@ the final check.
 ## Usage
 
 ```bash
+pip install margin-cli margin-data-storyteller
 margin run data-storyteller sales.xlsx --set output_dir=clean
 margin run data-storyteller sales.csv --set 'answers={"decimal:amount": "comma"}'
 ```
