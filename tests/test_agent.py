@@ -5,6 +5,8 @@ from __future__ import annotations
 import csv
 import io
 import json
+import subprocess
+import sys
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
@@ -143,3 +145,13 @@ async def test_personal_data_never_reaches_the_result(tmp_path: Path) -> None:
 async def test_unreadable_files_fail_clearly(tmp_path: Path) -> None:
     result = await run(tmp_path / "nope.csv")
     assert result.status == "error" and "No file" in (result.error or "")
+
+
+def test_listing_the_agent_does_not_load_the_data_libraries() -> None:
+    # margin list and GET /agents import every agent; pandas, scipy and duckdb wait for a run
+    code = (
+        "import sys, data_storyteller\n"
+        "print(sorted({'pandas', 'scipy', 'duckdb'} & set(sys.modules)))"
+    )
+    out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True)
+    assert out.stdout.strip() == "[]"

@@ -4,14 +4,15 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from margin_core import AgentResult, Answer, BaseAgent, Choice, Question, RunContext
 from margin_core.models import ResultStatus
 
-from data_storyteller import cleaning, facts, report, setup, story
-from data_storyteller.ingest import Source, read_source
 from data_storyteller.models import DataStorytellerInput, DataStorytellerOutput
-from data_storyteller.profile import profile
+
+if TYPE_CHECKING:
+    from data_storyteller.ingest import Source
 
 
 class DataStorytellerAgent(BaseAgent):
@@ -27,6 +28,12 @@ class DataStorytellerAgent(BaseAgent):
     uses_llm = True  # to write the story; cleaning and facts never call a model
 
     async def run(self, input: DataStorytellerInput, ctx: RunContext) -> AgentResult:
+        # imported here, not at the top: listing agents (margin list, GET /agents) should not
+        # load pandas, scipy and duckdb
+        from data_storyteller import cleaning, facts, report, setup, story
+        from data_storyteller.ingest import read_source
+        from data_storyteller.profile import profile
+
         ctx.report_progress("read", f"Reading {Path(input.dataset).name}", 0.05)
         source = await asyncio.to_thread(read_source, input.dataset)
         table = await self._choose_table(source, input, ctx)
