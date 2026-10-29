@@ -266,14 +266,18 @@ def anomalies(ctx: Context, book: FactBook) -> None:
                 if key in best and best[key][0] >= abs(z[i]):
                     continue
                 period = periods[i]
-                where = f"{period_expr} = {lit(period)}"
-                if dim is not None:
-                    where += f" AND {q(dim)} = {lit(member or '')}"
+                group = "TRUE" if dim is None else f"{q(dim)} = {lit(member or '')}"
+                where = f"{period_expr} = {lit(period)} AND {group}"
                 usual = float(np.median(values / days) * days[i])
                 best[key] = (float(abs(z[i])), {
                     "m": m, "dim": dim, "member": member, "period": period, "grain": grain,
                     "value": float(values[i]), "usual": usual, "z": float(z[i]),
                     "where": where, "n": int((labels == period).sum()),
+                    "series": list(zip(periods, values.tolist(), strict=True)),
+                    "series_sql": (
+                        f"SELECT {period_expr} AS label, COALESCE({m.sql(group)}, 0) AS value "
+                        f"FROM data WHERE {period_expr} IN {in_list(periods)} GROUP BY 1"
+                    ),
                 })  # fmt: skip
     for _, f in sorted(best.values(), key=lambda b: -b[0])[:MAX_ANOMALIES]:
         m = f["m"]
@@ -310,6 +314,9 @@ def anomalies(ctx: Context, book: FactBook) -> None:
             confidence=confidence(f["n"]),
             importance=min(1.0, 0.4 + abs(f["z"]) / 20),
             sql=f"SELECT {m.sql(f['where'])} FROM data",
+            # the series it stands out from, for its chart; checked like every number
+            points=[{"label": label, "value": value} for label, value in f["series"]],
+            points_sql=f["series_sql"],
         )
     _outlier_rows(ctx, book)
 

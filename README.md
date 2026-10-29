@@ -2,8 +2,8 @@
 
 Cleans a table of data, shows every change it made, and tells the story in it with charts.
 
-> **Status: experimental.** Cleaning, facts and the written story work and are tested, also
-> with a local model. The charts and the Power BI export are being built.
+> **Status: experimental.** Cleaning, facts, the written story and its charts work and are
+> tested, also with a local model. The Power BI export is being built.
 
 ## What it does
 
@@ -55,6 +55,11 @@ trust the numbers before working with them.
     low-confidence fact without hedging it, or quotes a change that Simpson's paradox makes
     misleading. The model gets the problems back, twice at most; after that, or without a
     model, the story is written from a template built from the facts' own sentences.
+11. **Draw the charts** from the facts' own checked numbers, at most three a page: the main
+    number over time with standout periods marked, a breakdown with the group the sentence
+    is about in colour, a meter for concentration, before-and-after dots for groups that
+    changed, and the series around an anomaly. In the web UI every number in the story
+    opens the fact behind it, and every chart can be shown as a table.
 
 ## Input
 
@@ -87,8 +92,10 @@ are listed in the report under `answers`.
   every fact: its number, a plain sentence, how it was computed, rows behind it, confidence,
   caveats, how much it matters, the SQL that recomputed it, and whether it matched.
 - `story`: with `stop_after="story"`, the title, shape and pages (title, headline, body,
-  actions to test, and the facts behind each sentence), who wrote it (`model` or
-  `template`), how many drafts the model wrote, and what the validator refused.
+  actions to test, charts, and the facts behind each sentence, with each number marked by
+  the fact it came from), who wrote it (`model` or `template`), how many drafts the model
+  wrote, and what the validator refused. A chart is a kind (`line`, `bars`, `dumbbell` or
+  `meter`), a title, its fact, and its points.
 - `files`: the files written to `output_dir`.
 
 Findings: in story mode, the story first, one finding per page; then one per change, each

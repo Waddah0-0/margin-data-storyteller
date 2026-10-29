@@ -11,7 +11,7 @@ from __future__ import annotations
 import re
 
 from data_storyteller.facts.base import Format, fmt
-from data_storyteller.models import Fact, FactsReport
+from data_storyteller.models import Fact, FactsReport, TextPart
 
 TOKEN = re.compile(r"\{(F\d{3})(?:\.([a-z_0-9]+))?\}")
 
@@ -74,6 +74,21 @@ def values(report: FactsReport) -> dict[str, str]:
     found: dict[str, str] = {}
     for fact in report.facts:
         found |= fact_values(fact)
+    return found
+
+
+def parts(text: str, table: dict[str, str]) -> list[TextPart]:
+    """The text in pieces: each token becomes its number, linked to the fact it comes
+    from, so a reader can open the fact behind any number."""
+    found: list[TextPart] = []
+    at = 0
+    for m in TOKEN.finditer(text):
+        if m.start() > at:
+            found.append(TextPart(text=text[at : m.start()]))
+        found.append(TextPart(text=table.get(m.group(0), m.group(0)), fact_id=m.group(1)))
+        at = m.end()
+    if at < len(text):
+        found.append(TextPart(text=text[at:]))
     return found
 
 

@@ -14,9 +14,9 @@ from collections.abc import Callable
 from margin_core.llm import LLMClient, Message
 
 from data_storyteller.models import Draft, FactsReport, Story, StoryPage, StorySentence
-from data_storyteller.story import template, validate
+from data_storyteller.story import charts, template, validate
 from data_storyteller.story.plan import TITLES, StoryPlan
-from data_storyteller.story.tokens import TOKEN, fact_values, render, tokenized, values
+from data_storyteller.story.tokens import TOKEN, fact_values, parts, render, tokenized, values
 
 MAX_DRAFTS = 3
 
@@ -81,7 +81,9 @@ def to_story(draft: Draft, plan: StoryPlan, report: FactsReport) -> Story:
             continue
 
         def sentence(text: str, fact_ids: list[str]) -> StorySentence:
-            return StorySentence(text=render(text, table), fact_ids=fact_ids)
+            return StorySentence(
+                text=render(text, table), fact_ids=fact_ids, parts=parts(text, table)
+            )
 
         pages.append(
             StoryPage(
@@ -100,6 +102,23 @@ def to_story(draft: Draft, plan: StoryPlan, report: FactsReport) -> Story:
 
 
 async def write(
+    llm: LLMClient | None,
+    plan: StoryPlan,
+    report: FactsReport,
+    *,
+    about: str,
+    title: str,
+    columns: list[str],
+    warn: Callable[[str], None],
+) -> Story:
+    """The story, by the model if it can pass the checks, by the template otherwise, with
+    a chart for each page drawn from the same checked facts."""
+    story = await _draft(llm, plan, report, about=about, title=title, columns=columns, warn=warn)
+    charts.attach(story, plan, report)
+    return story
+
+
+async def _draft(
     llm: LLMClient | None,
     plan: StoryPlan,
     report: FactsReport,

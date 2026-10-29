@@ -39,3 +39,9 @@ All notable changes to this agent are documented here. The format follows
   typed numbers, unknown names, wrong directions, unsupported causes, unhedged
   low-confidence claims and paradox-blind quotes, and sends the problems back twice at
   most; a template writes the story when the model is missing or keeps failing.
+- Charts for each story page, drawn from the facts: a line over time, bars, before-and-after
+  dots and a meter. Anomaly facts carry the series they were found in, also checked in
+  DuckDB.
+- Its own result view in the web UI: the story page by page with its charts, every number
+  a button that opens its fact (method, rows, confidence, caveats, the SQL that checked
+  it), a table view for every chart, and how the data was cleaned.

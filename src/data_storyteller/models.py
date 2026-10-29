@@ -232,9 +232,40 @@ class Draft(BaseModel):
     pages: list[DraftPage]
 
 
+class TextPart(BaseModel):
+    """A piece of a sentence. A number carries the id of the fact it comes from."""
+
+    text: str
+    fact_id: str | None = None
+
+
 class StorySentence(BaseModel):
     text: str
     fact_ids: list[str] = Field(default_factory=list)
+    parts: list[TextPart] = Field(
+        default_factory=list, description="The text in pieces, each number linked to its fact."
+    )
+
+
+class ChartPoint(BaseModel):
+    label: str
+    value: float
+    before: float | None = Field(default=None, description="For a before-and-after chart.")
+    highlight: bool = Field(default=False, description="The point the sentence is about.")
+
+
+class Chart(BaseModel):
+    """A chart drawn from one fact's checked numbers, never from the raw rows."""
+
+    kind: Literal["line", "bars", "dumbbell", "meter"]
+    title: str
+    fact_id: str
+    format: Literal["number", "percent", "change", "count", "ratio"]
+    unit: str | None = None
+    points: list[ChartPoint]
+    before_label: str | None = None
+    after_label: str | None = None
+    note: str | None = None
 
 
 class StoryAction(BaseModel):
@@ -250,6 +281,7 @@ class StoryPage(BaseModel):
     headline: StorySentence
     body: list[StorySentence] = Field(default_factory=list)
     actions: list[StoryAction] = Field(default_factory=list)
+    charts: list[Chart] = Field(default_factory=list)
     fact_ids: list[str] = Field(default_factory=list, description="Every fact on the page.")
 
 

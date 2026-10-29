@@ -10,15 +10,19 @@ from __future__ import annotations
 from data_storyteller.facts.base import readable, sentence
 from data_storyteller.models import Fact, Story, StoryAction, StoryPage, StorySentence
 from data_storyteller.story.plan import TITLES, StoryPlan
+from data_storyteller.story.tokens import fact_values, parts, tokenized
 
 
 def _sentence(fact: Fact) -> StorySentence:
     text = fact.statement
+    with_tokens = tokenized(fact)
+    extra = ""
     if fact.confidence == "low":
-        text += " This rests on a small sample, so treat it with care."
+        extra += " This rests on a small sample, so treat it with care."
     if fact.caveats and fact.kind in ("partial_period", "simpsons"):
-        text += " " + fact.caveats[0]
-    return StorySentence(text=text, fact_ids=[fact.id])
+        extra += " " + fact.caveats[0]
+    pieces = parts(with_tokens + extra, fact_values(fact))
+    return StorySentence(text=text + extra, fact_ids=[fact.id], parts=pieces)
 
 
 def action(fact: Fact) -> StoryAction | None:
