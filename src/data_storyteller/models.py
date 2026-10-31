@@ -11,12 +11,18 @@ Role = Literal["time", "identifier", "measure", "category", "free_text", "empty"
 Aggregation = Literal["sum", "average", "last", "count_distinct", "none", "unknown"]
 DecidedBy = Literal["rule", "user", "preset", "default"]
 
+# the file types the reader understands (ingest.py), offered by the web UI's file picker
+ACCEPTED = (".csv", ".tsv", ".txt", ".xlsx", ".xlsm", ".parquet", ".pq", ".json", ".db",
+            ".sqlite", ".sqlite3")  # fmt: skip
+
 
 class DataStorytellerInput(AnswersInput):
     dataset: str = Field(
         min_length=1,
-        description="Path to the data: CSV or TSV, Excel (.xlsx), Parquet, JSON or SQLite.",
+        description="The data file: CSV or TSV, Excel (.xlsx), Parquet, JSON or SQLite.",
         examples=["C:/data/sales.xlsx"],
+        # the web UI offers to upload a file of these types (margin-api fills in its path)
+        json_schema_extra={"format": "file-path", "x-accept": list(ACCEPTED)},
     )
     table: str | None = Field(
         default=None,
@@ -25,14 +31,16 @@ class DataStorytellerInput(AnswersInput):
     stop_after: Literal["clean", "story"] = Field(
         default="clean",
         description=(
-            "clean: clean the data and explain every change. story: also set up the story "
-            "(which numbers matter and how they add up); the story itself is not built yet."
+            "clean: clean the data and explain every change. story: also find the facts in "
+            "it and tell its story, with charts."
         ),
     )
     output_dir: str | None = Field(
         default=None,
         description="Folder for the cleaned data (CSV) and the cleaning report (JSON). "
-        "Nothing is written when empty.",
+        "Nothing is written when empty; in the web UI, both are offered for download.",
+        # margin-api fills in a folder of the run's own and serves the files from it
+        json_schema_extra={"format": "output-dir"},
     )
 
 

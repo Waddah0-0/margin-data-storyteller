@@ -65,10 +65,10 @@ trust the numbers before working with them.
 
 | Field | Default | Meaning |
 |---|---|---|
-| `dataset` | required | Path to the file. The primary input. |
+| `dataset` | required | Path to the file. The primary input. In the web UI you can upload the file instead. |
 | `table` | asked | The sheet or table, when the file has more than one. |
 | `stop_after` | `clean` | `clean`, or `story` to also set up the story (the main number, what one row is, how numbers add up), find its facts and write it. |
-| `output_dir` | none | A folder for the cleaned table (`<name>.clean.csv`) and the report (`<name>.cleaning.json`). Nothing is written without it. |
+| `output_dir` | none | A folder for the cleaned table (`<name>.clean.csv`) and the report (`<name>.cleaning.json`). Nothing is written without it, except in the web UI, which gives every run a folder and offers both files for download. |
 | `answers` | `{}` | Answers given up front, by question id, for example `{"date_order:order_date": "dmy"}`. These are not asked. |
 | `assume_defaults` | `false` | Ask nothing and take every suggested answer. Each one is marked as not confirmed. |
 

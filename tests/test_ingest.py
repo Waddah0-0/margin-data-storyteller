@@ -107,3 +107,18 @@ def test_clear_errors(tmp_path: Path, name: str, content: bytes | None, message:
         path.write_bytes(content)
     with pytest.raises(IngestError, match=message):
         read_source(path)
+
+
+def test_the_upload_picker_offers_exactly_the_types_the_reader_supports(tmp_path: Path) -> None:
+    from data_storyteller.models import ACCEPTED
+
+    for suffix in ACCEPTED:  # every offered type is read, not refused as unsupported
+        path = tmp_path / f"empty{suffix}"
+        path.write_bytes(b"")
+        with pytest.raises(IngestError) as caught:
+            read_source(str(path))
+        assert "Unsupported file type" not in str(caught.value), suffix
+    unsupported = tmp_path / "data.xyz"
+    unsupported.write_text("a")
+    with pytest.raises(IngestError, match="Unsupported file type"):
+        read_source(str(unsupported))

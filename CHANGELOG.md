@@ -4,6 +4,15 @@ All notable changes to this agent are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- In the web UI (margin-api 0.1.2 or later), the data file can be uploaded instead of typed
+  as a path, and the cleaned table and the report are offered for download.
+
+### Fixed
+- The description of `stop_after` still said the story was not built yet.
+
 ## [0.1.0] - 2026-10-29
 
 ### Added
