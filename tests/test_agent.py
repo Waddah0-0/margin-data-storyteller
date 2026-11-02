@@ -85,6 +85,28 @@ async def test_writes_the_clean_file_and_the_report(messy: dict[str, Path], tmp_
     assert report["cleaning"]["rows_out"] == 5 and "answers" in report
 
 
+async def test_a_spreadsheet_cannot_run_cells_of_the_clean_file(tmp_path: Path) -> None:
+    path = tmp_path / "people.csv"
+    path.write_text(
+        'name,note,=SUM(1)\nann,"=HYPERLINK(""http://evil.example"",""click"")",a\n'
+        "bob,=cmd|' /C calc'!A0,b\ncy,@SUM(1),c\ndee,+1+1,d\neve,+1 (555) 010-0100,e\nfay,-5,f\n",
+        encoding="utf-8",
+    )
+    result = await run(path, output_dir=str(tmp_path / "out"))
+    text = (tmp_path / "out" / "people.clean.csv").read_text(encoding="utf-8-sig")
+    rows = list(csv.reader(io.StringIO(text)))
+    assert rows[0][2] == "'=SUM(1)"
+    notes = [r[1] for r in rows[1:]]
+    assert notes[:4] == [
+        '\'=HYPERLINK("http://evil.example","click")', "'=cmd|' /C calc'!A0", "'@SUM(1)", "'+1+1",
+    ]  # fmt: skip
+    assert notes[4:] == ["+1 (555) 010-0100", "-5"]  # phone numbers and negatives are left alone
+    # it says so: in the run's warnings, and in the report next to the file
+    assert any("5 values in the cleaned CSV" in w for w in result.warnings)
+    report = json.loads((tmp_path / "out" / "people.cleaning.json").read_text(encoding="utf-8"))
+    assert any("spreadsheet formula" in n for n in report["source"]["notes"])
+
+
 async def test_story_mode_sets_up_the_story(messy: dict[str, Path]) -> None:
     responder = Scripted(grain="one department per row")
     result = await run(messy["no_date_data"], responder, stop_after="story")

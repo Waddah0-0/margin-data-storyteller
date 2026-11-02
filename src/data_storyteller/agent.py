@@ -21,7 +21,7 @@ class DataStorytellerAgent(BaseAgent):
     description = (
         "Cleans a table of data, shows every change it made, and tells the story in it with charts."
     )
-    version = "0.1.0"
+    version = "0.1.1"
     InputModel = DataStorytellerInput
     OutputModel = DataStorytellerOutput
     primary_input = "dataset"
@@ -103,9 +103,11 @@ class DataStorytellerAgent(BaseAgent):
 
         if input.output_dir:
             ctx.report_progress("write", f"Writing to {input.output_dir}", 0.9)
-            data.files = await asyncio.to_thread(
+            data.files, quoted = await asyncio.to_thread(
                 report.write, input.output_dir, data, clean, answers
             )
+            if quoted:
+                warnings.append(report.formula_note(quoted))
 
         ctx.report_progress("done", "Finished", 1.0)
         assumed = sum(a.source == "default" for a in answers.values())

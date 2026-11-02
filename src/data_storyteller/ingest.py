@@ -13,15 +13,19 @@ import io
 import json
 import math
 import sqlite3
+import zipfile
 from collections import Counter
 from dataclasses import dataclass, field
 from datetime import date, datetime, time
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 import pandas as pd
 
 MAX_FILE_BYTES = 500 * 1024 * 1024
+# Excel and Parquet are compressed: a small file can unpack to more than the machine's memory.
+MAX_UNPACKED_BYTES = 2 * 1024 * 1024 * 1024
 DELIMITERS = (",", ";", "\t", "|")
 TEXT_FORMATS = {".csv": "csv", ".tsv": "tsv", ".txt": "csv"}
 EXCEL_FORMATS = {".xlsx", ".xlsm"}
@@ -83,6 +87,7 @@ def read_source(path: str | Path) -> Source:
         if suffix == ".xls":
             raise IngestError("Old .xls workbooks are not supported; save it as .xlsx or CSV")
         if suffix in {".parquet", ".pq"}:
+            _check_unpacked(p, _parquet_unpacked_bytes(p))
             return _single(p, "parquet", _typed_table(p.stem, pd.read_parquet(p)))
         if suffix == ".json":
             return _read_json(p)
@@ -96,6 +101,21 @@ def read_source(path: str | Path) -> Source:
         f"Unsupported file type {suffix or '(none)'}: use CSV, TSV, Excel (.xlsx), Parquet, "
         "JSON or SQLite"
     )
+
+
+def _check_unpacked(path: Path, size: int) -> None:
+    if size > MAX_UNPACKED_BYTES:
+        raise IngestError(
+            f"{path.name} unpacks to {size / 1024**2:,.0f} MB; "
+            f"the limit is {MAX_UNPACKED_BYTES // 1024**2:,} MB"
+        )
+
+
+def _parquet_unpacked_bytes(path: Path) -> int:
+    import pyarrow.parquet as pq  # type: ignore[import-untyped]
+
+    meta = pq.read_metadata(path)
+    return sum(meta.row_group(i).total_byte_size for i in range(meta.num_row_groups))
 
 
 def _single(path: Path, fmt: str, table: RawTable, **kw: Any) -> Source:
@@ -190,6 +210,8 @@ def _typed_table(name: str, frame: pd.DataFrame) -> RawTable:
 def _read_excel(path: Path) -> Source:
     import openpyxl
 
+    with zipfile.ZipFile(path) as archive:
+        _check_unpacked(path, sum(item.file_size for item in archive.infolist()))
     # read_only + data_only: cached values only; formulas and macros are never evaluated
     workbook = openpyxl.load_workbook(path, read_only=True, data_only=True)
     tables: dict[str, RawTable] = {}
@@ -225,8 +247,12 @@ def _read_json(path: Path) -> Source:
 
 
 def _read_sqlite(path: Path) -> Source:
-    connection = sqlite3.connect(f"file:{path.resolve().as_posix()}?mode=ro", uri=True)
+    # quoted, or a ? or # in the path would be read as part of the URI
+    uri = f"file:{quote(path.resolve().as_posix(), safe='/:')}?mode=ro"
+    connection = sqlite3.connect(uri, uri=True)
     try:
+        # the file is untrusted: its schema may not call SQL functions with side effects
+        connection.execute("PRAGMA trusted_schema = OFF")
         names = [
             row[0]
             for row in connection.execute(

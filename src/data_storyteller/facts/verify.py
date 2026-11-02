@@ -29,7 +29,9 @@ def _close(a: float | None, b: float | None) -> bool:
 
 
 def verify(frame: pd.DataFrame, report: FactsReport) -> FactsReport:
-    connection = duckdb.connect()
+    # column names and values from the file end up in this SQL. They are quoted, and even if that
+    # ever failed, no query here can reach a file or the network.
+    connection = duckdb.connect(config={"enable_external_access": "false"})
     try:
         connection.register("data", frame)
         problems = []

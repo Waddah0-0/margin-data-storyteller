@@ -6,12 +6,24 @@ All notable changes to this agent are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-11-02
+
 ### Added
 - In the web UI (margin-api 0.1.2 or later), the data file can be uploaded instead of typed
   as a path, and the cleaned table and the report are offered for download.
 
 ### Fixed
 - The description of `stop_after` still said the story was not built yet.
+
+### Security
+- Text in the cleaned CSV that a spreadsheet would run as a formula gets a `'` in front, and the
+  run's warnings and the report say how many cells that changed. Plain negatives and phone
+  numbers are left alone.
+- Excel and Parquet files that unpack to more than 2 GB are refused.
+- SQLite files can't call functions with side effects from their schema, and a `#` or `?` in
+  their path is read as part of the path.
+- The SQL that checks each fact can't reach a file or the network.
+- The model is told, behind a random marker, that names from the file are data, not instructions.
 
 ## [0.1.0] - 2026-10-29
 

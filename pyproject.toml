@@ -1,6 +1,6 @@
 [project]
 name = "margin-data-storyteller"
-version = "0.1.0"
+version = "0.1.1"
 description = "Cleans a table of data, shows every change it made, and tells the story in it with charts."
 readme = "README.md"
 requires-python = ">=3.11"

@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
+from typing import Any
 
+import pandas as pd
 from margin_core import Answer, Evidence, Finding
 
 from data_storyteller.cleaning import Clean
@@ -27,6 +30,8 @@ ANSWERED = {
 }
 READ_AS = {"number": "numbers", "date": "dates", "text": "text", "empty": "empty"}
 TOP_FACTS = 10
+FORMULA_STARTS = ("=", "+", "-", "@", "\t", "\r")
+PLAIN_SIGNED = re.compile(r"^[+-][\d\s().,-]*$")  # -5 or +1 (555) 010-0100: harmless, left alone
 
 TITLES = {
     "header": "Where the data starts",
@@ -226,10 +231,32 @@ def summary(data: DataStorytellerOutput, assumed: int) -> str:
     return " ".join(parts)
 
 
+def _quote_formula(value: Any) -> Any:
+    """Text a spreadsheet would run as a formula, with a ``'`` in front so it shows as text."""
+    if isinstance(value, str) and value[:1] in FORMULA_STARTS and not PLAIN_SIGNED.match(value):
+        return "'" + value
+    return value
+
+
+def quote_formulas(frame: pd.DataFrame) -> tuple[pd.DataFrame, int]:
+    """The table with formula-like text quoted, and how many cells (or names) that changed."""
+    quoted = frame.copy()
+    count = 0
+    for column in frame.select_dtypes(include=["object", "string"]).columns:
+        values = frame[column].map(_quote_formula, na_action="ignore")
+        count += int((values != frame[column]).where(frame[column].notna(), False).sum())
+        quoted[column] = values
+    names = [_quote_formula(c) for c in frame.columns]
+    count += sum(new != old for new, old in zip(names, frame.columns, strict=True))
+    quoted.columns = pd.Index(names)
+    return quoted, count
+
+
 def write(
     folder: str, data: DataStorytellerOutput, clean: Clean, answers: dict[str, Answer]
-) -> list[str]:
-    """Write the cleaned table (CSV) and the report (JSON). Returns the paths written."""
+) -> tuple[list[str], int]:
+    """Write the cleaned table (CSV) and the report (JSON). Returns the paths written and how
+    many cells were quoted because a spreadsheet would run them as formulas."""
     out = Path(folder).expanduser()
     out.mkdir(parents=True, exist_ok=True)
     stem = Path(data.source.file).stem
@@ -243,9 +270,20 @@ def write(
             dates = frame[column]
             midnight = (dates.dropna() == dates.dropna().dt.normalize()).all()
             frame[column] = dates.dt.strftime("%Y-%m-%d" if midnight else "%Y-%m-%d %H:%M:%S")
+    frame, quoted = quote_formulas(frame)
+    if quoted:
+        data.source.notes.append(formula_note(quoted))
     # utf-8 with a BOM, so Excel shows accents and Arabic text correctly
     frame.to_csv(csv_path, index=False, encoding="utf-8-sig", float_format="%.15g")
     report = data.model_dump(mode="json", exclude={"files"})
     report["answers"] = [a.model_dump(mode="json") for a in answers.values()]
     report_path.write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
-    return [str(csv_path), str(report_path)]
+    return [str(csv_path), str(report_path)], quoted
+
+
+def formula_note(quoted: int) -> str:
+    return (
+        f"{quoted:,} value{'s' if quoted != 1 else ''} in the cleaned CSV "
+        f"start{'' if quoted != 1 else 's'} like a spreadsheet formula, so a ' was put in front "
+        "to stop a spreadsheet running it. Nothing else about them changed."
+    )

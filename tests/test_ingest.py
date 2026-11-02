@@ -10,6 +10,7 @@ from pathlib import Path
 import openpyxl
 import pandas as pd
 import pytest
+from data_storyteller import ingest
 from data_storyteller.ingest import IngestError, decode, read_source, sniff_delimiter
 
 
@@ -122,3 +123,28 @@ def test_the_upload_picker_offers_exactly_the_types_the_reader_supports(tmp_path
     unsupported.write_text("a")
     with pytest.raises(IngestError, match="Unsupported file type"):
         read_source(str(unsupported))
+
+
+def test_a_file_that_unpacks_too_far_is_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    pd.DataFrame({"a": ["x" * 100] * 1000}).to_parquet(tmp_path / "t.parquet")
+    workbook = openpyxl.Workbook()
+    workbook.create_sheet("big").append(["x" * 1000] * 100)
+    workbook.save(tmp_path / "t.xlsx")
+    monkeypatch.setattr(ingest, "MAX_UNPACKED_BYTES", 10)
+    for name in ("t.parquet", "t.xlsx"):
+        with pytest.raises(IngestError, match="unpacks to"):
+            read_source(tmp_path / name)
+
+
+def test_a_sqlite_path_with_uri_characters_is_read_as_a_path(tmp_path: Path) -> None:
+    folder = tmp_path / "a#b"
+    folder.mkdir()
+    path = folder / "c.db"
+    connection = sqlite3.connect(path)
+    connection.execute("CREATE TABLE t (a)")
+    connection.execute("INSERT INTO t VALUES (1)")
+    connection.commit()
+    connection.close()
+    assert read_source(path).tables["t"].rows == [[1]]

@@ -163,3 +163,12 @@ def test_benjamini_hochberg() -> None:
     # sorted: 0.01*4/1 = 0.04, 0.03*4/2 = 0.06, 0.04*4/3 = 0.0533, 0.2; then made monotone
     assert adjust([0.01, 0.04, 0.03, 0.2]) == pytest.approx([0.04, 0.16 / 3, 0.16 / 3, 0.2])
     assert adjust([]) == []
+
+
+def test_a_check_query_cannot_reach_files(golden: dict[str, Path], tmp_path: Path) -> None:
+    frame, report = _run(str(golden["logistics"]))
+    secret = tmp_path / "secret.csv"
+    secret.write_text("a\n1\n", encoding="utf-8")
+    report.facts[0].sql = f"SELECT count(*) FROM read_csv('{secret.as_posix()}')"
+    with pytest.raises(duckdb.Error, match="(?i)disabled"):
+        facts.verify(frame, report)
